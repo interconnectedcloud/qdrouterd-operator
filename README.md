@@ -10,7 +10,7 @@ Qdrouterd Operator proves a `Qdrouterd` [Custom Resource Definition](https://kub
 
 Deploy the Qdrouterd Operator into the Kubernetes cluster where it will manage requests for the `Qdrouterd` resource. The Qdrouterd Operator will watch for create, update and delete resource requests and perform the necessary steps to ensure the present cluster state matches the desired state.
 
-#### Deploy Qdrouterd Operator
+### Deploy Qdrouterd Operator
 
 The `deploy` directory contains the manifests needed to properly install the
 Operator.
@@ -77,30 +77,70 @@ spec:
     role: interior
     size: 3
     placement: Any
-  addresses:
-    - prefix: balanced
-      distribution: balanced
-    - prefix: closest
-      distribution: closest
-    - prefix: multicast
-      distribution: multicast
 EOF
 ```
 
-The Qdrouterd Operator will act upon the creation of the resource by
-creating the necessary Kubernetes resources for the desired deployment.
-These resources will be monitored by the Qdrouterd Operator and will maintain
-the desired state as long as the `Qdrouterd` resource exists. 
-
-You will be able to confirm that the instance has been created in the cluster and
-you can review its details. To view the Qdrtouterd instance, the deployment it manages
-and the associated pods that are deployed:
+The Qdrouterd Operator will create a deployment of three router instances, all connected together with default address semantics. It will also create a service through which the interior router mesh can be accessed. It will configure a default set of listeners and connectors as described below. You will be able to confirm that the instance has been created in the cluster and you can review its details. To view the Qdrtouterd instance, the deployment it manages and the associated pods that are deployed:
 
 ```
 $ kubectl describe qdr example-interconnect
 $ kubectl describe deploy example-interconnect
+$ kubectl describe svc example-interconnect
 $ kubectl get pods -o yaml
 ```
+
+### Deployment Plan
+
+The Qdrouterd Operator *Deployment Plan* defines the attributes for a custom resource instance.
+
+#### Role and Placement
+
+The *Deployment Plan* **Role** defines the mode of operation for the routers in a topology.
+
+  * interior - This mode creates an interconnect of auto-meshed routers for concurrent connection capacity and resiliency.
+    Connectivity between the interior routers will be defined by *InterRouterListeners* and *InterRouterConnectors*. Downlink
+    connectivity with *edge* routers will be via the *EdgeListeners*.
+
+  * edge -  This mode creates a set of stand-alone edge routers. The connectivity from the edge to interior routers
+    will be via the *EdgeConnectors*.
+
+The *Deployment Plan* **Placement** defines the deployment resource and the associated scheduling of the pods in the cluster.
+
+  * Any - There is no constraint on pod placement. The operator will manage a *Deployment* resource where the number of
+    pods scheduled will be up to the *Deployment Plan Size* defined.
+
+  * Every - The pod placement is for each node in the cluster. The operator will manage a "DaemonSet" resource where the
+    number of pods scheduled will correspond to the number of nodes in the cluster. The *Deployment Plan Size* is
+    disregarded with this placement declaration.
+
+  * Anti-Affinity - This constrains scheduling and prevents multiple router pods from running on the same node in the
+    cluster. The operator will manage a *Deployment* resource with a number of pods up to the *Deployment Plan Size*.
+    If *Deployment Plan Size* is greater than the number of nodes in the cluster, the excess pods that cannot be
+    schedule will remain in the *pending* state.
+
+### Connectivity
+
+The connectivity between routers in a deployment is via the declared *listeners* and *connectors*. There are three types of *listeners* supported by the operator.
+
+  * Listeners - A normal listener for accepting messaging client connections. The operator supports this listener for
+    both *interior* and *edge* routers.
+
+  * InterRouterListeners - An inter router listener for accepting connections from peer *interior* routers. The operator
+    support this listener for *interior* routers **only**.
+
+  * EdgeListeners - An edge listener for accepting connections from downlink *edge* routers. The operator supports this
+    listener for *interior* routers **only**.
+
+There are three types of *connectors* supported by the operator.
+
+  * Connectors - A normal connector for connecting to an external messaging intermediary. The operator supports this connector
+    for both *interior* and *edge* routers.
+
+  * InterRouterConnectors - An inter router connector for establishing connectivity to peer *interior* routers. The operator
+    supports this listener for *interior* routers **only**.
+
+  * EdgeConnector - An edge connector for establishing up-link connectivity from *edge* to *interior* routers. The operator
+    supports this listener for *edge* routers **only**.
 
 ## Development
 
@@ -179,7 +219,7 @@ $ make cluster-test
 
 ## Manage the operator using the Operator Lifecycle Manager
 
-Ensure the Operator Lifecycle Manager is installed in the local cluster.  By default, the `catalog-source.sh` will intall the operator catalog resources in `operator-lifecycle-manager` namespace.  You may also specify different namespace where you have the Operator Lifecycle Manager installed. 
+Ensure the Operator Lifecycle Manager is installed in the local cluster.  By default, the `catalog-source.sh` will install the operator catalog resources in `operator-lifecycle-manager` namespace.  You may also specify different namespace where you have the Operator Lifecycle Manager installed.
 
 ```
 $ ./hack/catalog-source.sh [namespace]
